@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贪吃蛇游戏</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #score-board {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        #game-board {
+            background-color: #333;
+            display: grid;
+            grid-template-rows: repeat(21, 1fr);
+            grid-template-columns: repeat(21, 1fr);
+            width: 100vmin;
+            height: 100vmin;
+        }
+        .snake {
+            background-color: #00ff00;
+            border: .25vmin solid black;
+        }
+        .food {
+            background-color: #ff0000;
+            border: .25vmin solid black;
+        }
+        .obstacle {
+            background-color: #808080;
+            border: .25vmin solid black;
+        }
+    </style>
+</head>
+<body>
+    <div id="score-board">得分: 0</div>
+    <div id="game-board"></div>
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const scoreBoard = document.getElementById('score-board');
+        const GRID_SIZE = 21;
+        let snake = [{ x: 11, y: 11 }];
+        let direction = { x: 0, y: 0 };
+        let newSegments = 0;
+        let score = 0;
+        // 随机生成障碍物
+        let obstacles = generateObstacles();
+        // 再获取食物位置
+        let food = getRandomFoodPosition();
+
+        // 初始时间间隔（毫秒），数值越大速度越慢
+        let intervalTime = 300; 
+        // 最小时间间隔（阈值），防止速度过快
+        const MIN_INTERVAL_TIME = 50; 
+        // 每得多少分减少一次时间间隔
+        const SCORE_STEP = 10; 
+        // 每次减少的时间间隔
+        const INTERVAL_DECREMENT = 20; 
+        let gameInterval;
+
+        function main() {
+            console.log('游戏开始');
+            gameInterval = setInterval(() => {
+                update();
+                draw();
+            }, intervalTime);
+        }
+
+        function update() {
+            addSegments();
+            const inputDirection = getInputDirection();
+            for (let i = snake.length - 2; i >= 0; i--) {
+                snake[i + 1] = { ...snake[i] };
+            }
+            snake[0].x += inputDirection.x;
+            snake[0].y += inputDirection.y;
+            if (onSnake(food)) {
+                newSegments += 1;
+                score += 10; // 每次吃到食物得分加 10
+                scoreBoard.textContent = `得分: ${score}`;
+                food = getRandomFoodPosition();
+
+                // 根据得分计算新的时间间隔
+                const newIntervalTime = intervalTime - Math.floor(score / SCORE_STEP) * INTERVAL_DECREMENT;
+                intervalTime = Math.max(newIntervalTime, MIN_INTERVAL_TIME);
+
+                clearInterval(gameInterval);
+                gameInterval = setInterval(() => {
+                    update();
+                    draw();
+                }, intervalTime);
+            }
+            if (snake[0].x < 1 || snake[0].x > GRID_SIZE || snake[0].y < 1 || snake[0].y > GRID_SIZE || onObstacle(snake[0])) {
+                resetGame();
+            }
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[i].x === snake[0].x && snake[i].y === snake[0].y) {
+                    resetGame();
+                }
+            }
+        }
+
+        function resetGame() {
+            snake = [{ x: 11, y: 11 }];
+            direction = { x: 0, y: 0 };
+            score = 0; // 重置游戏时得分清零
+            scoreBoard.textContent = `得分: ${score}`;
+            obstacles = generateObstacles();
+            food = getRandomFoodPosition();
+            // 重置时间间隔
+            intervalTime = 300; 
+            // 清除现有的定时器
+            clearInterval(gameInterval);
+            // 重新启动游戏定时器
+            main();
+        }
+
+        function draw() {
+            try {
+                gameBoard.innerHTML = '';
+                // 检查贪吃蛇是否能正常绘制
+                console.log('绘制贪吃蛇，长度: ', snake.length);
+                snake.forEach(segment => {
+                    const snakeElement = document.createElement('div');
+                    snakeElement.style.gridRowStart = segment.y;
+                    snakeElement.style.gridColumnStart = segment.x;
+                    snakeElement.classList.add('snake');
+                    gameBoard.appendChild(snakeElement);
+                });
+
+                // 检查食物是否能正常绘制
+                console.log('绘制食物，位置: ', food);
+                const foodElement = document.createElement('div');
+                foodElement.style.gridRowStart = food.y;
+                foodElement.style.gridColumnStart = food.x;
+                foodElement.classList.add('food');
+                gameBoard.appendChild(foodElement);
+
+                // 检查障碍物是否能正常绘制
+                console.log('绘制障碍物，数量: ', obstacles.length);
+                obstacles.forEach(obstacle => {
+                    const obstacleElement = document.createElement('div');
+                    obstacleElement.style.gridRowStart = obstacle.y;
+                    obstacleElement.style.gridColumnStart = obstacle.x;
+                    obstacleElement.classList.add('obstacle');
+                    gameBoard.appendChild(obstacleElement);
+                });
+            } catch (error) {
+                console.error('绘制过程中出现错误: ', error);
+            }
+        }
+
+        function getRandomFoodPosition() {
+            let newFoodPosition;
+            while (newFoodPosition == null || onSnake(newFoodPosition) || onObstacle(newFoodPosition)) {
+                newFoodPosition = {
+                    x: Math.floor(Math.random() * GRID_SIZE) + 1,
+                    y: Math.floor(Math.random() * GRID_SIZE) + 1
+                };
+            }
+            return newFoodPosition;
+        }
+
+        function onSnake(position, { ignoreHead = false } = {}) {
+            return snake.some((segment, index) => {
+                if (ignoreHead && index === 0) return false;
+                return equalPositions(segment, position);
+            });
+        }
+
+        function onObstacle(position) {
+            return obstacles.some(obstacle => equalPositions(obstacle, position));
+        }
+
+        function equalPositions(pos1, pos2) {
+            return pos1.x === pos2.x && pos1.y === pos2.y;
+        }
+
+        function addSegments() {
+            for (let i = 0; i < newSegments; i++) {
+                snake.push({ ...snake[snake.length - 1] });
+            }
+            newSegments = 0;
+        }
+
+        let lastInputDirection = { x: 0, y: 0 };
+        function getInputDirection() {
+            return direction;
+        }
+
+        window.addEventListener('keydown', e => {
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (lastInputDirection.y !== 0) return;
+                    direction = { x: 0, y: -1 };
+                    lastInputDirection = direction;
+                    break;
+                case 'ArrowDown':
+                    if (lastInputDirection.y !== 0) return;
+                    direction = { x: 0, y: 1 };
+                    lastInputDirection = direction;
+                    break;
+                case 'ArrowLeft':
+                    if (lastInputDirection.x !== 0) return;
+                    direction = { x: -1, y: 0 };
+                    lastInputDirection = direction;
+                    break;
+                case 'ArrowRight':
+                    if (lastInputDirection.x !== 0) return;
+                    direction = { x: 1, y: 0 };
+                    lastInputDirection = direction;
+                    break;
+            }
+        });
+
+        function generateObstacles() {
+            const obstacleCount = Math.floor(Math.random() * 5) + 3; // 随机生成 3 到 7 个障碍物
+            const obstacleList = [];
+            while (obstacleList.length < obstacleCount) {
+                const newObstacle = {
+                    x: Math.floor(Math.random() * GRID_SIZE) + 1,
+                    y: Math.floor(Math.random() * GRID_SIZE) + 1
+                };
+                // 避免调用 onObstacle 函数
+                let isOnSnake = snake.some(segment => equalPositions(segment, newObstacle));
+                let isOnObstacle = obstacleList.some(obstacle => equalPositions(obstacle, newObstacle));
+                if (!isOnSnake && !isOnObstacle) {
+                    obstacleList.push(newObstacle);
+                }
+            }
+            return obstacleList;
+        }
+
+        // 移除重复的 resetGame 函数定义
+
+        main();
+    </script>
+</body>
+</html>
